@@ -226,7 +226,7 @@ namespace alog::details {
 		}
 
 		virtual ~output_logfile() {
-			// no need to release STD_xxxx_HANDLE
+			CloseHandle(_file);
 		}
 
 		DWORD sync_send(const void* data, DWORD len) {
