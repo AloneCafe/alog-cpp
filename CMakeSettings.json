@@ -22,7 +22,49 @@
       "buildCommandArgs": "",
       "ctestCommandArgs": "",
       "inheritEnvironments": [ "linux_x64" ],
-      "wslPath": "${defaultWSLPath}"
+      "wslPath": "${defaultWSLPath}",
+      "variables": [
+        {
+          "name": "CMAKE_CXX_COMPILER",
+          "value": "/usr/bin/g++-11",
+          "type": "FILEPATH"
+        },
+        {
+          "name": "CMAKE_CXX_COMPILER_AR",
+          "value": "/usr/bin/gcc-ar-11",
+          "type": "FILEPATH"
+        },
+        {
+          "name": "CMAKE_CXX_COMPILER_RANLIB",
+          "value": "/usr/bin/gcc-ranlib-11",
+          "type": "FILEPATH"
+        },
+        {
+          "name": "CMAKE_AR",
+          "value": "/usr/bin/gcc-ar-11",
+          "type": "FILEPATH"
+        },
+        {
+          "name": "CMAKE_C_COMPILER",
+          "value": "/usr/bin/gcc-11",
+          "type": "FILEPATH"
+        },
+        {
+          "name": "CMAKE_C_COMPILER_AR",
+          "value": "/usr/bin/gcc-ar-11",
+          "type": "FILEPATH"
+        },
+        {
+          "name": "CMAKE_C_COMPILER_RANLIB",
+          "value": "/usr/bin/gcc-ranlib-11",
+          "type": "FILEPATH"
+        },
+        {
+          "name": "CMAKE_NM",
+          "value": "/usr/bin/nm",
+          "type": "FILEPATH"
+        }
+      ]
     }
   ]
 }

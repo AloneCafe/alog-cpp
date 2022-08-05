@@ -38,7 +38,9 @@
 #include <vector>
 #include <future>
 #include <cstddef>
+#include <type_traits>
 #include <concepts>
+#include <cstring>
 
 /// @ref https://sourceforge.net/p/predef/wiki/OperatingSystems/
 
@@ -52,14 +54,18 @@
 #elif defined(linux) || defined(__linux) || defined(__linux__) || defined(__ANDROID__)
 
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #define ALOG_UNIX_LIKE
 
 #elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
-#include <type_traits>
+
+
 
 #elif defined(macintosh) || defined(Macintosh) || defined(__APPLE__)
+
 
 #elif defined(sun) || defined(__sun)
 
@@ -183,12 +189,14 @@ namespace alog::details {
 			// no need to release STD_xxxx_HANDLE
 		}
 
+#if 0
 		DWORD sync_send(const void* data, DWORD len) {
 			DWORD len_written;
 			if (WriteConsole(_sh, data, len, &len_written, nullptr))
 				return len_written;
 			return 0;
 		}
+#endif
 
 		void async_send(const void* data, DWORD len) {
 			async_send(data, len, _oc);
@@ -218,23 +226,25 @@ namespace alog::details {
 		output_logfile(const char *filename) {
 			_file = CreateFile(filename, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 			if (_file == INVALID_HANDLE_VALUE) {
-				throw std::system_error(std::string{ "Cannot open log file " } + filename);
+				throw std::string{ "Cannot open log file " } + filename;
 			}
-			if (!SetFilePointer(_file, 0, 0, FILE_END)) {
-				throw std::system_error(std::string{ "Cannot seek log file " } + filename);
-			}
+			SetFilePointer(_file, 0, 0, FILE_END);
 		}
+
+		output_logfile(const std::string & filename) : output_logfile(filename.c_str()) {}
 
 		virtual ~output_logfile() {
 			CloseHandle(_file);
 		}
 
+#if 0
 		DWORD sync_send(const void* data, DWORD len) {
 			DWORD len_written;
 			if (WriteFile(_file, data, len, &len_written, nullptr))
 				return len_written;
 			return 0;
 		}
+#endif
 
 		void async_send(const void* data, DWORD len) {
 			std::vector<char> buf(reinterpret_cast<const char*>(data), reinterpret_cast<const char*>(data) + len);
@@ -261,9 +271,11 @@ namespace alog::details {
 
 		}
 
+#if 0
 		ssize_t sync_send(const void* data, size_t len) {
 			return write(static_cast<int>(DT), data, len);
 		}
+#endif
 
 		void async_send(const void* data, unsigned int len) {
 			async_send(data, len, _oc);
@@ -342,6 +354,33 @@ namespace alog::details {
 				};
 			}
 		}
+	};
+
+	template<output_direction_type DT = output_direction_type::o_logfile>
+		requires (DT == output_direction_type::o_logfile)
+	struct output_logfile : abstract_output_device {
+
+		output_logfile(const char* filename) {
+			_file = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
+		}
+
+		output_logfile(const std::string& filename) : output_logfile(filename.c_str()) {}
+
+		virtual ~output_logfile() {
+			close(_file);
+		}
+
+		void async_send(const void* data, size_t len) {
+			std::vector<char> buf(reinterpret_cast<const char*>(data), reinterpret_cast<const char*>(data) + len);
+			std::async([](int file, std::vector<char> buf) -> ssize_t {
+				ssize_t ssiz = 0;
+				ssiz += write(file, buf.data(), buf.size());
+				return ssiz;
+			}, _file, std::move(std::ref(buf)));
+		}
+
+	private:
+		int _file;
 	};
 #else
 	// not compiled
