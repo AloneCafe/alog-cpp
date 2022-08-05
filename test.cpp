@@ -11,7 +11,8 @@ int main() {
 	//o.async_send(x.c_str(), s.size(), alog::output_ctrl::bg_red);
 	//for (int s = 10000; s > 0; s--);
 	//o.async_send(x.c_str(), s.size());
-	alog::impl::logger<level::error, details::output_console<output_direction_type::o_stderr> > log;
-	log << "hello, world!" << '\n';
+	//alog::impl::logger<level::error, details::output_console<output_direction_type::o_stderr> > log;
+	alog::impl::logger<level::error, details::output_logfile<output_direction_type::o_logfile> > log("G:\\a.log");
+	log << std::string{ "hello, world!" } << '\n';
 	return 0;
 }
