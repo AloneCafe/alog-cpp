@@ -80,6 +80,7 @@
 
 namespace alog {
 
+
 	enum class output_direction_type : char {
 		o_stdout = 1,
 		o_stderr,
@@ -150,7 +151,6 @@ namespace alog {
 		return lhs = { static_cast<output_ctrl>(static_cast<uint16_t>(lhs) | static_cast<uint16_t>(rhs)) };
 	}
 
-
 	enum class log_level : uint16_t {
 		fatal,
 		error,
@@ -169,19 +169,20 @@ namespace alog {
 
 
 	output_ctrl log_body_output_ctrl_config[] = {
-		output_ctrl::ft_red | output_ctrl::bg_white | output_ctrl::reverse,
-		output_ctrl::ft_red,
+		output_ctrl::ft_red | output_ctrl::underscore,
+		output_ctrl::ft_red | output_ctrl::ft_intensity,
 		output_ctrl::ft_yellow ,
+		output_ctrl::ft_white,
 		output_ctrl::ft_green,
-		output_ctrl::ft_black | output_ctrl::bg_white,
+		
 	};
 
 	output_ctrl log_head_output_ctrl_config[] = {
-		output_ctrl::ft_red | output_ctrl::bg_white | output_ctrl::ft_intensity,
-		output_ctrl::ft_red | output_ctrl::ft_intensity,
-		output_ctrl::ft_yellow | output_ctrl::ft_intensity,
-		output_ctrl::ft_green | output_ctrl::ft_intensity,
-		output_ctrl::ft_black | output_ctrl::bg_white | output_ctrl::ft_intensity,
+		output_ctrl::reverse | output_ctrl::ft_red,
+		output_ctrl::reverse | output_ctrl::ft_red | output_ctrl::ft_intensity,
+		output_ctrl::reverse | output_ctrl::ft_yellow | output_ctrl::ft_intensity,
+		output_ctrl::reverse | output_ctrl::ft_white | output_ctrl::ft_intensity,
+		output_ctrl::reverse | output_ctrl::ft_green | output_ctrl::ft_intensity,
 	};
 
 	inline output_ctrl ALOG_LEVEL_BODY_OUTPUT_CTRL(log_level lv) {
@@ -264,14 +265,6 @@ namespace alog::details {
 			CloseHandle(_file);
 		}
 
-#if 0
-		DWORD sync_send(const void* data, DWORD len) {
-			DWORD len_written;
-			if (WriteFile(_file, data, len, &len_written, nullptr))
-				return len_written;
-			return 0;
-		}
-#endif
 
 		void async_send(const void* data, DWORD len) {
 			std::vector<char> buf(reinterpret_cast<const char*>(data), reinterpret_cast<const char*>(data) + len);
@@ -404,27 +397,41 @@ namespace alog::impl {
 	protected:
 		Output _out;
 
-		log_printer_base() : has_head_printed(false) {}
+		log_printer_base() : has_head_printed(false) {
+		}
 
 	public:
 		virtual ~log_printer_base() {
-			static const char* blk = "\n";
-			_out.async_send(blk, 1);
+			_out.async_send("\n", 1);
 		}
 
 	public:
 		virtual log_printer_base& operator<<(const std::string_view & rhs) {
-			static const char *blk = "    ";
-			auto meta = get_head_string();
+
+			auto tim = get_head_time_string(); 
+			auto sign = get_head_sign_string();
 			if (!has_head_printed) {
+
 				if constexpr (std::derived_from<Output, rich_style_output_device>) {
-					_out.async_send(meta.data(), meta.length(), ALOG_LEVEL_HEAD_OUTPUT_CTRL(LV));
+					_out.async_send(tim.data(), tim.size() - 1, ALOG_LEVEL_BODY_OUTPUT_CTRL(LV));
 				} else if constexpr (std::derived_from<Output, plain_style_output_device>) {
-					_out.async_send(meta.data(), meta.length());
+					_out.async_send(tim.data(), tim.size() - 1);
 				} else {
-					_out.async_send(meta.data(), meta.length());
+					_out.async_send(tim.data(), tim.size() - 1);
 				}
-				_out.async_send(blk, 1);
+				_out.async_send(" ", 1);
+
+				if constexpr (std::derived_from<Output, rich_style_output_device>) {
+					_out.async_send(sign.data(), sign.length(), ALOG_LEVEL_HEAD_OUTPUT_CTRL(LV));
+				} else if constexpr (std::derived_from<Output, plain_style_output_device>) {
+					_out.async_send(sign.data(), sign.length());
+				} else {
+					_out.async_send(sign.data(), sign.length());
+				}
+				_out.async_send(": ", 2);
+
+				
+
 				has_head_printed = true;
 			}
 
@@ -448,11 +455,36 @@ namespace alog::impl {
 			return *this << std::string_view(&rhs, &rhs + 1);
 		}
 
+//		template<typename T>
+//		log_printer_base& operator<<(T rhs) {
+//			if constexpr (std::is_integral_v<T>) {
+//				return *this <<
+//#ifdef ALOG_WINDOWS
+//					"\r\n"
+//#else
+//					"\n"
+//#endif
+//					;
+//			}
+//			return *this;
+//		}
+
+
 	private:
 		bool has_head_printed;
 
-		std::string_view get_head_string() {
+		std::vector<char> get_head_time_string() {
+			std::vector<char> buffer(80);
+			timespec ts;
+			timespec_get(&ts, TIME_UTC);
+			strftime(buffer.data(), buffer.size(), "%F %T", std::gmtime(&ts.tv_sec));
+			sprintf(buffer.data(), "%s.%09ld", buffer.data(), ts.tv_nsec);
+			return buffer;
+		}
+
+		std::string_view get_head_sign_string() {
 			std::string_view meta;
+			
 			if constexpr (LV == log_level::fatal) {
 				meta = "[!]";
 			} else if constexpr (LV == log_level::error) {
@@ -473,14 +505,13 @@ namespace alog::impl {
 
 	template <log_level LV, typename Output>
 		requires std::derived_from<Output, __output_device>
-	struct log_printer : virtual log_printer_base<LV, Output> {
+	struct log_printer {
 		
-		using father = log_printer_base<LV, Output>;
-		//father f0;
+		using base = log_printer_base<LV, Output>;
 
 	public:
-		father operator()() {
-			return father();
+		base operator()() {
+			return base{};
 		}
 	};
 
