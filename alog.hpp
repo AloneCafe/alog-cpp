@@ -1,35 +1,36 @@
 ﻿/********************************************************************************\
  * @file    alog.hpp
  * @brief   Yet another header-only asynchronous logging library base on C++ 20
- * 
+ *
  * @author  AloneCafe
+ *
+ *
  * @license MIT
  \*******************************************************************************/
 
 
+ /********************************************************************************\
+  MIT License
 
-/********************************************************************************\
- MIT License
+  Copyright (c) 2022 Alone Cafe
 
- Copyright (c) 2022 Alone Cafe
+  Permission is hereby granted, free of charge, to any person obtaining a copy of
+  this software and associated documentation files (the "Software"), to deal in
+  the Software without restriction, including without limitation the rights to
+  use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+  the Software, and to permit persons to whom the Software is furnished to do so,
+  subject to the following conditions:
 
- Permission is hereby granted, free of charge, to any person obtaining a copy of
- this software and associated documentation files (the "Software"), to deal in
- the Software without restriction, including without limitation the rights to
- use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- the Software, and to permit persons to whom the Software is furnished to do so,
- subject to the following conditions:
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
 
- The above copyright notice and this permission notice shall be included in all
- copies or substantial portions of the Software.
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. 
-\********************************************************************************/
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+  FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+  COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+  IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+  CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ \********************************************************************************/
 
 #ifndef __ALOG_HPP_444E89BD_26E4_41F9_A351_5AE6B7FB12E8__
 #define __ALOG_HPP_444E89BD_26E4_41F9_A351_5AE6B7FB12E8__
@@ -40,9 +41,10 @@
 #include <cstddef>
 #include <type_traits>
 #include <concepts>
+#include <sstream>
 #include <cstring>
 
-/// @ref https://sourceforge.net/p/predef/wiki/OperatingSystems/
+ /// @ref https://sourceforge.net/p/predef/wiki/OperatingSystems/
 
 #if defined(_WIN32) || defined(_WIN64) || defined(__WINDOWS_)
 
@@ -140,30 +142,55 @@ namespace alog {
 #endif
 	};
 
-	output_ctrl operator|(const output_ctrl & lhs, const output_ctrl & rhs) {
+	output_ctrl operator|(const output_ctrl& lhs, const output_ctrl& rhs) {
 		return { static_cast<output_ctrl>(static_cast<uint16_t>(lhs) | static_cast<uint16_t>(rhs)) };
 	}
 
-	output_ctrl & operator|=(output_ctrl& lhs, const output_ctrl& rhs) {
+	output_ctrl& operator|=(output_ctrl& lhs, const output_ctrl& rhs) {
 		return lhs = { static_cast<output_ctrl>(static_cast<uint16_t>(lhs) | static_cast<uint16_t>(rhs)) };
 	}
 
 
-	enum class level {
+	enum class log_level : uint16_t {
+		fatal,
 		error,
 		warn,
 		info,
 		debug,
 	};
 
-	
+
 
 	void apply_global_args(int argc, char* argv[]);
 
-	struct abstract_output_device {
-		
+	struct __output_device {};
+	struct rich_style_output_device : __output_device {};
+	struct plain_style_output_device : __output_device {};
+
+
+	output_ctrl log_body_output_ctrl_config[] = {
+		output_ctrl::ft_red | output_ctrl::bg_white | output_ctrl::reverse,
+		output_ctrl::ft_red,
+		output_ctrl::ft_yellow ,
+		output_ctrl::ft_green,
+		output_ctrl::ft_black | output_ctrl::bg_white,
 	};
 
+	output_ctrl log_head_output_ctrl_config[] = {
+		output_ctrl::ft_red | output_ctrl::bg_white | output_ctrl::ft_intensity,
+		output_ctrl::ft_red | output_ctrl::ft_intensity,
+		output_ctrl::ft_yellow | output_ctrl::ft_intensity,
+		output_ctrl::ft_green | output_ctrl::ft_intensity,
+		output_ctrl::ft_black | output_ctrl::bg_white | output_ctrl::ft_intensity,
+	};
+
+	inline output_ctrl ALOG_LEVEL_BODY_OUTPUT_CTRL(log_level lv) {
+		return log_body_output_ctrl_config[static_cast<uint16_t>(lv)];
+	}
+
+	inline output_ctrl ALOG_LEVEL_HEAD_OUTPUT_CTRL(log_level lv) {
+		return log_head_output_ctrl_config[static_cast<uint16_t>(lv)];
+	}
 }
 
 namespace alog::details {
@@ -171,12 +198,12 @@ namespace alog::details {
 
 #ifdef ALOG_WINDOWS
 	template<output_direction_type DT = output_direction_type::o_stderr>
-	requires (DT == output_direction_type::o_stdout || DT == output_direction_type::o_stderr)
-	struct output_console : abstract_output_device {
+		requires (DT == output_direction_type::o_stdout || DT == output_direction_type::o_stderr)
+	struct output_console : rich_style_output_device {
 		output_console() {
 			HANDLE sh = GetStdHandle(
 				DT == output_direction_type::o_stderr ?
-				STD_ERROR_HANDLE : 
+				STD_ERROR_HANDLE :
 				STD_OUTPUT_HANDLE
 			);
 			_sh = std::move(sh);
@@ -210,7 +237,7 @@ namespace alog::details {
 				auto ret = WriteConsole(sh, buf.data(), buf.size(), &len_written, nullptr);
 				SetConsoleTextAttribute(sh, static_cast<WORD>(oc_old));
 				return ret ? len_written : 0;
-			}, _sh, std::move(std::ref(buf)), oc, _oc);
+				}, _sh, std::move(std::ref(buf)), oc, _oc);
 		}
 
 
@@ -220,10 +247,10 @@ namespace alog::details {
 	};
 
 	template<output_direction_type DT = output_direction_type::o_logfile>
-	requires (DT == output_direction_type::o_logfile)
-	struct output_logfile : abstract_output_device {
+		requires (DT == output_direction_type::o_logfile)
+	struct output_logfile : plain_style_output_device {
 
-		output_logfile(const char *filename) {
+		output_logfile(const char* filename) {
 			_file = CreateFile(filename, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 			if (_file == INVALID_HANDLE_VALUE) {
 				throw std::string{ "Cannot open log file " } + filename;
@@ -231,7 +258,7 @@ namespace alog::details {
 			SetFilePointer(_file, 0, 0, FILE_END);
 		}
 
-		output_logfile(const std::string & filename) : output_logfile(filename.c_str()) {}
+		output_logfile(const std::string& filename) : output_logfile(filename.c_str()) {}
 
 		virtual ~output_logfile() {
 			CloseHandle(_file);
@@ -252,7 +279,7 @@ namespace alog::details {
 				DWORD len_written;
 				auto ret = WriteFile(file, buf.data(), buf.size(), &len_written, nullptr);
 				return ret ? len_written : 0;
-			}, _file, std::move(std::ref(buf)));
+				}, _file, std::move(std::ref(buf)));
 		}
 
 	private:
@@ -261,8 +288,8 @@ namespace alog::details {
 
 #elif defined(ALOG_UNIX_LIKE)
 	template<output_direction_type DT>
-	requires (DT == output_direction_type::o_stdout || DT == output_direction_type::o_stderr)
-	struct output_console : abstract_output_device {
+		requires (DT == output_direction_type::o_stdout || DT == output_direction_type::o_stderr)
+	struct output_console : rich_style_output_device {
 		output_console() {
 			_oc = static_cast<output_ctrl>(0); // 0 means no specified style
 		}
@@ -271,57 +298,29 @@ namespace alog::details {
 
 		}
 
-#if 0
-		ssize_t sync_send(const void* data, size_t len) {
-			return write(static_cast<int>(DT), data, len);
-		}
-#endif
 
 		void async_send(const void* data, unsigned int len) {
 			async_send(data, len, _oc);
 		}
 
-#if 0
-		void async_send(const void* data, unsigned int len, output_ctrl oc) {
-
-			std::vector<char> buf(reinterpret_cast<const char*>(data), reinterpret_cast<const char*>(data) + len);
-			
-			std::async([this](std::vector<char> print_buf, output_ctrl oc, output_ctrl oc_old) -> ssize_t {
-
-				auto buf_beg = output_ctrl_to_echo_bytes(oc);
-				auto buf_end = output_ctrl_to_echo_bytes(oc_old);
-				std::vector<char> buf(print_buf.size() + buf_beg.size() + buf_end.size());
-
-				auto 
-				cur = std::copy(buf_beg.cbegin(), buf_beg.cend(), buf.begin());
-				cur = std::copy(print_buf.cbegin(), print_buf.cend(), cur);
-				cur = std::copy(buf_end.cbegin(), buf_end.cend(), cur);
-
-				ssize_t ssiz = 0;
-				ssiz += write(static_cast<int>(DT), buf.data(), buf.size());
-				return ssiz;
-
-			}, std::move(std::ref(buf)), oc, _oc);
-		}
-#endif
+		
 
 		void async_send(const void* data, unsigned int len, output_ctrl oc) {
 
 			std::vector<char> buf(reinterpret_cast<const char*>(data), reinterpret_cast<const char*>(data) + len);
-
+			const static char blk[] = { ' ', ' ', ' ', ' ' };
 			std::async([this](std::vector<char> print_buf, output_ctrl oc, output_ctrl oc_old) -> ssize_t {
 
 				auto buf_beg = output_ctrl_to_echo_bytes(oc);
 				auto buf_end = output_ctrl_to_echo_bytes(oc_old);
 				std::vector<char> buf = buf_beg;
 
-				std::for_each(print_buf.cbegin(), print_buf.cend(), [&buf, &buf_end, &buf_beg](const auto& e) {
+				std::for_each(print_buf.cbegin(), print_buf.cend(), [&buf, &buf_end, &buf_beg, &print_buf](const auto& e) {
 					if (e == '\n') {
 						buf.insert(buf.end(), buf_end.cbegin(), buf_end.cend());
 						buf.push_back(e);
 						buf.insert(buf.end(), buf_beg.cbegin(), buf_beg.cend());
-					}
-					else {
+					} else {
 						buf.push_back(e);
 					}
 					});
@@ -346,7 +345,7 @@ namespace alog::details {
 			} else {
 				auto b = ((static_cast<uint16_t>(oc) >> 8) & 0x000F);
 				if (b == 2 || b == 3 || b == 6 || b > 8) b = 0;
-				return { '\e', '[', 
+				return { '\e', '[',
 					'3', '0' + (static_cast<uint16_t>(oc) & 0x000F), ';',
 					'4', '0' + ((static_cast<uint16_t>(oc) >> 4) & 0x000F), ';',
 					'0' + (b ? b : 1),
@@ -358,7 +357,7 @@ namespace alog::details {
 
 	template<output_direction_type DT = output_direction_type::o_logfile>
 		requires (DT == output_direction_type::o_logfile)
-	struct output_logfile : abstract_output_device {
+	struct output_logfile : plain_style_output_device {
 
 		output_logfile(const char* filename) {
 			_file = open(filename, O_WRONLY | O_CREAT | O_APPEND, 0644);
@@ -376,7 +375,7 @@ namespace alog::details {
 				ssize_t ssiz = 0;
 				ssiz += write(file, buf.data(), buf.size());
 				return ssiz;
-			}, _file, std::move(std::ref(buf)));
+				}, _file, std::move(std::ref(buf)));
 		}
 
 	private:
@@ -394,28 +393,123 @@ namespace alog::details {
 
 namespace alog::impl {
 
-	template <level LV, typename Output>
-	requires std::derived_from<Output, abstract_output_device>
-	struct logger {
+	template <log_level LV, typename Output>
+		requires std::derived_from<Output, __output_device>
+	struct log_printer;
+
+	template <log_level LV, typename Output>
+		requires std::derived_from<Output, __output_device>
+	struct log_printer_base {
+		friend struct log_printer<LV, Output>;
+	protected:
 		Output _out;
 
-		logger& operator<<(const std::string& rhs) {
-			_out.async_send(rhs.c_str(), rhs.length());
+		log_printer_base() : has_head_printed(false) {}
+
+	public:
+		virtual ~log_printer_base() {
+			static const char* blk = "\n";
+			_out.async_send(blk, 1);
+		}
+
+	public:
+		virtual log_printer_base& operator<<(const std::string_view & rhs) {
+			static const char *blk = "    ";
+			auto meta = get_head_string();
+			if (!has_head_printed) {
+				if constexpr (std::derived_from<Output, rich_style_output_device>) {
+					_out.async_send(meta.data(), meta.length(), ALOG_LEVEL_HEAD_OUTPUT_CTRL(LV));
+				} else if constexpr (std::derived_from<Output, plain_style_output_device>) {
+					_out.async_send(meta.data(), meta.length());
+				} else {
+					_out.async_send(meta.data(), meta.length());
+				}
+				_out.async_send(blk, 1);
+				has_head_printed = true;
+			}
+
+
+			if constexpr (std::derived_from<Output, rich_style_output_device>) {
+				_out.async_send(rhs.data(), rhs.length(), ALOG_LEVEL_BODY_OUTPUT_CTRL(LV));
+			} else if constexpr (std::derived_from<Output, plain_style_output_device>) {
+				_out.async_send(rhs.data(), rhs.length());
+			} else {
+				_out.async_send(rhs.data(), rhs.length());
+			}
+
 			return *this;
 		}
 
-		logger& operator<<(const char * rhs) {
-			_out.async_send(rhs, strlen(rhs));
-			return *this;
+		virtual log_printer_base& operator<<(const char* rhs) {
+			return *this << std::string_view(rhs);
 		}
 
-		logger& operator<<(char rhs) {
-			_out.async_send(&rhs, 1);
-			return *this;
+		virtual log_printer_base& operator<<(char rhs) {
+			return *this << std::string_view(&rhs, &rhs + 1);
+		}
+
+	private:
+		bool has_head_printed;
+
+		std::string_view get_head_string() {
+			std::string_view meta;
+			if constexpr (LV == log_level::fatal) {
+				meta = "[!]";
+			} else if constexpr (LV == log_level::error) {
+				meta = "[E]";
+			} else if constexpr (LV == log_level::warn) {
+				meta = "[W]";
+			} else if constexpr (LV == log_level::info) {
+				meta = "[I]";
+			} else if constexpr (LV == log_level::debug) {
+				meta = "[D]";
+			} else {
+				meta = "[*]";
+			}
+
+			return meta;
+		}
+	};
+
+	template <log_level LV, typename Output>
+		requires std::derived_from<Output, __output_device>
+	struct log_printer : virtual log_printer_base<LV, Output> {
+		
+		using father = log_printer_base<LV, Output>;
+		//father f0;
+
+	public:
+		father operator()() {
+			return father();
 		}
 	};
 
 }
 
+namespace alog {
+
+	impl::log_printer<log_level::fatal, details::output_console<output_direction_type::o_stderr> > _log_FATAL;
+	impl::log_printer<log_level::error, details::output_console<output_direction_type::o_stderr> > _log_ERROR;
+	impl::log_printer<log_level::warn,  details::output_console<output_direction_type::o_stderr> > _log_WARN;
+	impl::log_printer<log_level::info,  details::output_console<output_direction_type::o_stderr> > _log_INFO;
+	impl::log_printer<log_level::debug, details::output_console<output_direction_type::o_stderr> > _log_DEBUG;
+
+}
+
+#define LOG(X) alog::_log_##X()
+
+#define LOGF   alog::_log_FATAL()
+#define LOGE   alog::_log_ERROR()
+#define LOGW   alog::_log_WARN()
+#define LOGI   alog::_log_INFO()
+#define LOGD   alog::_log_DEBUG()
+
+#define LOG_FATAL  alog::_log_FATAL()
+#define LOG_ERROR  alog::_log_ERROR()
+#define LOG_ERR    alog::_log_ERROR()
+#define LOG_WARN   alog::_log_WARN()
+#define LOG_INFO   alog::_log_INFO()
+#define LOG_DEBUG  alog::_log_DEBUG()
+#define LOG_DBG    alog::_log_DEBUG()
 
 #endif // __ALOG_HPP_444E89BD_26E4_41F9_A351_5AE6B7FB12E8__
