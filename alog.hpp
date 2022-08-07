@@ -151,13 +151,19 @@ namespace alog {
 		return lhs = { static_cast<output_ctrl>(static_cast<uint16_t>(lhs) | static_cast<uint16_t>(rhs)) };
 	}
 
-	enum class log_level : uint16_t {
+	enum log_level : uint16_t {
 		fatal,
 		error,
 		warn,
 		info,
 		debug,
+
+		// append here
+
+
+		dummy,
 	};
+	bool __output_level_disabled[log_level::dummy - log_level::fatal] = { false };
 
 
 
@@ -402,11 +408,24 @@ namespace alog::impl {
 
 	public:
 		virtual ~log_printer_base() {
+			if (silenced()) { // has been silenced
+				return;
+			}
+
+			// if not, output CR
 			_out.async_send("\n", 1);
+		}
+
+		bool silenced() const {
+			return __output_level_disabled[static_cast<uint16_t>(LV)];
 		}
 
 	public:
 		virtual log_printer_base& operator<<(const std::string_view & rhs) {
+
+			if (silenced()) { // has been silenced
+				return *this;
+			}
 
 			auto tim = get_head_time_string(); 
 			auto sign = get_head_sign_string();
@@ -503,6 +522,13 @@ namespace alog::impl {
 		}
 	};
 
+	struct log_printer_dummy {
+		template <typename T>
+		log_printer_dummy & operator<<(T) {
+			return *this;
+		}
+	};
+
 	template <log_level LV, typename Output>
 		requires std::derived_from<Output, __output_device>
 	struct log_printer {
@@ -524,6 +550,14 @@ namespace alog {
 	impl::log_printer<log_level::warn,  details::output_console<output_direction_type::o_stderr> > _log_WARN;
 	impl::log_printer<log_level::info,  details::output_console<output_direction_type::o_stderr> > _log_INFO;
 	impl::log_printer<log_level::debug, details::output_console<output_direction_type::o_stderr> > _log_DEBUG;
+
+	void set_output_threshold(log_level disable_above) {
+		uint16_t beg = static_cast<uint16_t>(disable_above);
+		uint16_t end = static_cast<uint16_t>(log_level::dummy);
+		for (auto i = beg + 1; i < end; ++i) {
+			__output_level_disabled[i] = true;
+		}
+	}
 
 }
 
