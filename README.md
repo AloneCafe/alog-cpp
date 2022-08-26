@@ -25,3 +25,5 @@ int main() {
 	return 0;
 }
   ```
+## Result
+![image](https://user-images.githubusercontent.com/20834047/186965817-43cc4e8e-cd98-4092-9d10-166b471aafbc.png)
