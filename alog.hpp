@@ -43,6 +43,8 @@
 #include <concepts>
 #include <sstream>
 #include <cstring>
+#include <ctime>
+#include <time.h>
 
  /// @ref https://sourceforge.net/p/predef/wiki/OperatingSystems/
 
@@ -52,6 +54,37 @@
 #include <wincon.h>
 
 #define ALOG_WINDOWS
+
+int clock_gettime(int, struct timespec* tv) {
+	static int initialized = 0;
+	static LARGE_INTEGER freq, startCount;
+	static struct timespec tv_start;
+	LARGE_INTEGER curCount;
+	time_t sec_part;
+	long nsec_part;
+
+	if (!initialized) {
+		QueryPerformanceFrequency(&freq);
+		QueryPerformanceCounter(&startCount);
+		timespec_get(&tv_start, TIME_UTC);
+		initialized = 1;
+	}
+
+	QueryPerformanceCounter(&curCount);
+
+	curCount.QuadPart -= startCount.QuadPart;
+	sec_part = curCount.QuadPart / freq.QuadPart;
+	nsec_part = (long)((curCount.QuadPart - (sec_part * freq.QuadPart))
+		* 1000000000UL / freq.QuadPart);
+
+	tv->tv_sec = tv_start.tv_sec + sec_part;
+	tv->tv_nsec = tv_start.tv_nsec + nsec_part;
+	if (tv->tv_nsec >= 1000000000UL) {
+		tv->tv_sec += 1;
+		tv->tv_nsec -= 1000000000UL;
+	}
+	return 0;
+}
 
 #elif defined(linux) || defined(__linux) || defined(__linux__) || defined(__ANDROID__)
 
@@ -496,7 +529,7 @@ namespace alog::impl {
 			std::vector<char> buffer(80);
 			timespec ts;
 			timespec_get(&ts, TIME_UTC);
-			strftime(buffer.data(), buffer.size(), "%F %T", std::gmtime(&ts.tv_sec));
+			strftime(buffer.data(), buffer.size(), "%F %T", localtime(&ts.tv_sec));
 			sprintf(buffer.data(), "%s.%09ld", buffer.data(), ts.tv_nsec);
 			return buffer;
 		}
