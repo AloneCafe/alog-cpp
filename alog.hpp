@@ -519,7 +519,7 @@ namespace alog::impl {
 		std::vector<char> get_head_time_string() {
 			std::vector<char> buffer(80);
 			timespec ts {  };
-            clock_gettime(CLOCK_REALTIME, &ts);
+            clock_gettime(0, &ts);
 			strftime(buffer.data(), buffer.size(), "%Y-%m-%d %H:%M:%S", localtime(&ts.tv_sec));
 			sprintf(buffer.data(), "%s.%09ld", buffer.data(), ts.tv_nsec);
 			return buffer;
