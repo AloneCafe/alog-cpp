@@ -492,11 +492,11 @@ namespace alog::impl {
 			if (!has_head_printed) {
 
 				if constexpr (std::derived_from<Output, rich_style_output_device>) {
-					_out.async_send(tim.data(), tim.size() - 1, ALOG_LEVEL_BODY_OUTPUT_CTRL(LV));
+					_out.async_send(tim.data(), strlen(tim.data()), ALOG_LEVEL_BODY_OUTPUT_CTRL(LV));
 				} else if constexpr (std::derived_from<Output, plain_style_output_device>) {
-					_out.async_send(tim.data(), tim.size() - 1);
+					_out.async_send(tim.data(), strlen(tim.data()));
 				} else {
-					_out.async_send(tim.data(), tim.size() - 1);
+					_out.async_send(tim.data(), strlen(tim.data()));
 				}
 				_out.async_send(" ", 1);
 

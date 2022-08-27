@@ -34,6 +34,3 @@
 # Directories
 out/
 .vs/
-
-# test.cpp
-test.cpp
