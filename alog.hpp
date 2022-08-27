@@ -44,7 +44,6 @@
 #include <sstream>
 #include <cstring>
 #include <ctime>
-#include <time.h>
 
  /// @ref https://sourceforge.net/p/predef/wiki/OperatingSystems/
 
@@ -55,35 +54,15 @@
 
 #define ALOG_WINDOWS
 
-int clock_gettime(int, struct timespec* tv) {
-	static int initialized = 0;
-	static LARGE_INTEGER freq, startCount;
-	static struct timespec tv_start;
-	LARGE_INTEGER curCount;
-	time_t sec_part;
-	long nsec_part;
-
-	if (!initialized) {
-		QueryPerformanceFrequency(&freq);
-		QueryPerformanceCounter(&startCount);
-		timespec_get(&tv_start, TIME_UTC);
-		initialized = 1;
-	}
-
-	QueryPerformanceCounter(&curCount);
-
-	curCount.QuadPart -= startCount.QuadPart;
-	sec_part = curCount.QuadPart / freq.QuadPart;
-	nsec_part = (long)((curCount.QuadPart - (sec_part * freq.QuadPart))
-		* 1000000000UL / freq.QuadPart);
-
-	tv->tv_sec = tv_start.tv_sec + sec_part;
-	tv->tv_nsec = tv_start.tv_nsec + nsec_part;
-	if (tv->tv_nsec >= 1000000000UL) {
-		tv->tv_sec += 1;
-		tv->tv_nsec -= 1000000000UL;
-	}
-	return 0;
+int clock_gettime(int, struct timespec *spec)      //C-file part
+{
+    constexpr __int64 n1 = 116444736000000000;
+    constexpr __int64 n2 = 10000000;
+    __int64 wintime; GetSystemTimeAsFileTime((FILETIME*)&wintime);
+    wintime      -= n1;  //1jan1601 to 1jan1970
+    spec->tv_sec  = wintime / n2;           //seconds
+    spec->tv_nsec = wintime % n2 * 100;      //nano-seconds
+    return 0;
 }
 
 #elif defined(linux) || defined(__linux) || defined(__linux__) || defined(__ANDROID__)
@@ -453,7 +432,7 @@ namespace alog::details {
 namespace alog::impl {
 
 	template <log_level LV, typename Output>
-		requires std::derived_from<Output, __output_device>
+        requires std::derived_from<Output, __output_device>
 	struct log_printer;
 
 	template <log_level LV, typename Output>
@@ -534,29 +513,14 @@ namespace alog::impl {
 			return *this << std::string_view(&rhs, &rhs + 1);
 		}
 
-//		template<typename T>
-//		log_printer_base& operator<<(T rhs) {
-//			if constexpr (std::is_integral_v<T>) {
-//				return *this <<
-//#ifdef ALOG_WINDOWS
-//					"\r\n"
-//#else
-//					"\n"
-//#endif
-//					;
-//			}
-//			return *this;
-//		}
-
-
 	private:
 		bool has_head_printed;
 
 		std::vector<char> get_head_time_string() {
 			std::vector<char> buffer(80);
-			timespec ts;
-			timespec_get(&ts, TIME_UTC);
-			strftime(buffer.data(), buffer.size(), "%F %T", localtime(&ts.tv_sec));
+			timespec ts {  };
+            clock_gettime(CLOCK_REALTIME, &ts);
+			strftime(buffer.data(), buffer.size(), "%Y-%m-%d %H:%M:%S", localtime(&ts.tv_sec));
 			sprintf(buffer.data(), "%s.%09ld", buffer.data(), ts.tv_nsec);
 			return buffer;
 		}

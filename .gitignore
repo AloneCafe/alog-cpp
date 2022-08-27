@@ -34,3 +34,4 @@
 # Directories
 out/
 .vs/
+cmake-*/
