@@ -10,7 +10,7 @@ and also the handing of command line arguments which could control the behavior 
 
 ## Usage
   1. Copy the 'alog.hpp' as you like in your C++ project.
-  2. Here is an simple example:
+  2. Here is a simple example:
   ```cpp
 #include "alog.hpp"
 
