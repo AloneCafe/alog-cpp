@@ -44,6 +44,7 @@
 #include <sstream>
 #include <cstring>
 #include <ctime>
+#include <algorithm>
 
  /// @ref https://sourceforge.net/p/predef/wiki/OperatingSystems/
 
@@ -341,7 +342,6 @@ namespace alog::details {
 			async_send(data, len, _oc);
 		}
 
-		
 
 		void async_send(const void* data, unsigned int len, output_ctrl oc) {
 
@@ -384,9 +384,9 @@ namespace alog::details {
 				auto b = ((static_cast<uint16_t>(oc) >> 8) & 0x000F);
 				if (b == 2 || b == 3 || b == 6 || b > 8) b = 0;
 				return { '\e', '[',
-					'3', '0' + (static_cast<uint16_t>(oc) & 0x000F), ';',
-					'4', '0' + ((static_cast<uint16_t>(oc) >> 4) & 0x000F), ';',
-					'0' + (b ? b : 1),
+					'3', static_cast<char>('0' + (static_cast<uint16_t>(oc) & 0x000F)), ';',
+					'4', static_cast<char>('0' + ((static_cast<uint16_t>(oc) >> 4) & 0x000F)), ';',
+					static_cast<char>('0' + (b ? b : 1)),
 					'm',
 				};
 			}
